@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Aktivitas 2 — Simulasi Empati "Walk in Her Shoes"</title>
+  <style>
+    :root{--bg:#f7f8fb;--card:#ffffff;--accent:#2b6cb0;--muted:#556}
+    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;background:var(--bg);color:#05204a}
+    .wrap{max-width:1200px;margin:0 auto;padding:20px}
+    header{text-align:center;margin-bottom:20px}
+    h1{font-size:24px;margin:10px 0;color:var(--accent)}
+    .meta{color:var(--muted);font-size:14px}
+    .grid{display:grid;grid-template-columns:1fr 350px;gap:20px}
+    .card{background:var(--card);border-radius:12px;padding:18px;box-shadow:0 4px 10px rgba(0,0,0,0.08)}
+    .controls{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:12px}
+    button{background:var(--accent);color:#fff;border:0;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:14px}
+    button.ghost{background:#fff;color:var(--accent);border:1px solid var(--accent)}
+    button:disabled{background:#cccccc;cursor:not-allowed;color:#666} /* Style for disabled buttons */
+    input,select,textarea{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(0,0,0,0.2);margin-top:6px;font-size:14px}
+    textarea:disabled{background:#e9ecef;cursor:not-allowed;} /* Style for disabled textareas */
+    .case{background:#f1f6fc;border-left:4px solid var(--accent);padding:12px;border-radius:8px;margin-top:10px}
+    .case h3{margin:0 0 6px;font-size:16px;color:#0a2c61}
+    .case p{margin:0;font-size:14px;color:#2b3b50}
+    .timer{font-size:32px;font-weight:bold;color:var(--accent);text-align:center;margin:15px 0}
+    .groups{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+    .group-card{background:#fafcff;padding:12px;border-radius:10px;border:1px solid #e0e6f0}
+    .group-card strong{color:var(--accent)}
+    footer{margin-top:20px;text-align:center;color:var(--muted);font-size:13px}
+    @media(max-width:900px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Aktivitas 2 — Simulasi Empati "Walk in Her Shoes"</h1>
+      <div class="meta">Membangun empati & menganalisis hambatan gender — 45 menit</div>
+      <div class="controls">
+        <button id="btnReset" class="ghost">Reset</button>
+        <button id="btnExport">Simpan Hasil (.csv)</button>
+        <button id="btnDownload" class="ghost">Unduh Instruksi</button>
+      </div>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Petunjuk Fasilitator</h2>
+        <ol>
+          <li>Bagi peserta ke dalam kelompok 7–8 orang berdasarkan gender (cowok dengan cowok, cewek dengan cewek).</li>
+          <li>Setiap kelompok akan mendapatkan satu kasus kompleks.</li>
+          <li>Diskusi kelompok 20 menit — gunakan timer.</li>
+          <li>Presentasi kelompok 3–4 menit.</li>
+          <li>Lakukan debrief bersama dengan pertanyaan panduan.</li>
+        </ol>
+
+        <label>Jumlah peserta</label>
+        <input id="numPeserta" type="number" value="36" />
+
+        <div class="controls">
+          <!-- Tambahkan atribut 'data-fasilitator-only' untuk identifikasi -->
+          <button id="btnDivide" data-fasilitator-only="true">Bagi Kelompok</button>
+          <button id="btnAssign" class="ghost" data-fasilitator-only="true">Bagikan Kasus</button>
+        </div>
+
+        <h3>Kartu Studi Kasus</h3>
+        <div id="caseList"></div>
+
+        <h3>Pertanyaan Debrief</h3>
+        <ul>
+          <li>Perasaan apa yang muncul saat menjalani peran?</li>
+          <li>Hambatan apa yang dialami tokoh dalam kasus?</li>
+          <li>Strategi apa yang bisa dilakukan untuk mengatasi hambatan tersebut?</li>
+          <li>Langkah apa yang bisa kita lakukan di lingkungan kita?</li>
+        </ul>
+      </section>
+
+      <aside class="card">
+        <h2>Timer Diskusi</h2>
+        <input id="timerMinutes" type="number" value="20" /> menit
+        <div class="timer" id="timerDisplay">20:00</div>
+        <div class="controls">
+          <button id="btnStart">Mulai</button>
+          <button id="btnPause" class="ghost">Jeda</button>
+          <button id="btnStop" class="ghost">Stop</button>
+        </div>
+        <h3>Kelompok</h3>
+        <div class="groups" id="groupsArea"></div>
+      </aside>
+    </div>
+
+    <footer>Versi 3.0 — Kelompok 7–8 orang, kasus kompleks, Qinan sudah dikoreksi gender</footer>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js"; // Update versi ke 10.11.0
+    import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js"; // Tambahkan 'get'
+
+    // 🔧 Config Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyBwjLTec3_aWRXeJLkDBVf23Nuk8RKgREM",
+      authDomain: "aktivitas2-e6ee4.firebaseapp.com",
+      databaseURL: "https://aktivitas2-e6ee4-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "aktivitas2-e6ee4",
+      storageBucket: "aktivitas2-e6ee4.firebasestorage.app",
+      messagingSenderId: "283548832186",
+      appId: "1:283548832186:web:76a71772b939275722cd83",
+      measurementId: "G-TKYV882PK3"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const database = getDatabase(app);
+
+    // Variabel global untuk status timer
+    let timerRunning = false;
+    let timeRemaining = 0; // Waktu tersisa global
+    const TIMER_DB_PATH = 'activity_state/timer'; // Path di Firebase untuk timer
+    const GROUP_CONFIG_DB_PATH = 'activity_state/groups'; // Path di Firebase untuk konfigurasi kelompok
+
+    // Data peserta (tetap sama)
+    const peserta = [
+      {nama:"ABDUL AZIZ SUTAN FABIAN", gender:"L"},
+      {nama:"ALIF SABANA NOFITO", gender:"L"},
+      {nama:"ALIFAH NAILAH MUFADHOLAH", gender:"P"},
+      {nama:"ALIYA YUNDA", gender:"P"},
+      {nama:"ARFA RAFIF NUGRAHA", gender:"L"},
+      {nama:"AURORA KEYSHA AZ ZAHRA", gender:"P"},
+      {nama:"DEVI RAHMA WATI", gender:"P"},
+      {nama:"DEWI CHALIMAH", gender:"P"},
+      {nama:"DUTA ADILUHUNG", gender:"L"},
+      {nama:"ERLANGGA EKA PUTRA", gender:"L"},
+      {nama:"FARADILLA AULIA", gender:"P"},
+      {nama:"FEBRIANTO NUR WICAK SONO", gender:"L"},
+      {nama:"FITRA NANDA PRATAMA", gender:"L"},
+      {nama:"GHIFARI MAGHRIBI ANWAR", gender:"L"},
+      {nama:"IKFINA TAQIYA", gender:"P"},
+      {nama:"INDI NUR INAYAH", gender:"P"},
+      {nama:"INTAN NAFISA", gender:"P"},
+      {nama:"LINTANG FARATIKA PANGESTY", gender:"P"},
+      {nama:"LUTHFI ATUL FUADAH", gender:"P"},
+      {nama:"MAULINA NUR SALMA", gender:"P"},
+      {nama:"MIFTAKHUL JANNAH", gender:"P"},
+      {nama:"MUHAMMAD AZF’A RAIHAN", gender:"L"},
+      {nama:"MUHAMMAD BAKHRUL HADITAMA", gender:"L"},
+      {nama:"MUHAMMAD FAIZAL MARUF", gender:"L"},
+      {nama:"MUHAMMAD FARID KURNIAWAN", gender:"L"},
+      {nama:"NAYLA FAUZIAH ABIDA", gender:"P"},
+      {nama:"NOVIA AYYATI PUTRI", gender:"P"},
+      {nama:"NUR SALMA AISA AZ-ZAHRA", gender:"P"},
+      {nama:"NURA HASNAH APRILIA", gender:"P"},
+      {nama:"QINAN AMALIY FEIZA", gender:"L"},
+      {nama:"RAABIAH SAMARQANDI YAHYA", gender:"P"},
+      {nama:"RISSA OKTAVIANA RIYANTO", gender:"P"},
+      {nama:"SELDNADIA WENING PRAHABSTI", gender:"P"},
+      {nama:"SITI CHOTIJAH", gender:"P"},
+      {nama:"TAZKIA MAULIDA RAHMALIA", gender:"P"},
+      {nama:"YASMIN", gender:"P"}
+    ];
+
+    // Kasus kompleks yang lebih naratif (tetap sama)
+    const kasus = [
+      {
+        title: "Ibu Ani — Perjuangan Posyandu Remaja",
+        text: `Ibu Ani, seorang kepala dusun perempuan yang baru menjabat, memiliki visi besar untuk desanya. Ia mengusulkan program Posyandu Remaja sebagai upaya mencegah pernikahan dini dan memberikan edukasi kesehatan reproduksi. Namun, gagasannya ditolak mentah-mentah oleh sebagian besar tokoh masyarakat laki-laki dan bahkan beberapa ibu-ibu di desanya, dengan alasan "itu urusan perempuan yang tidak perlu diumbar" dan "anak gadis jangan terlalu banyak tahu nanti malah aneh-aneh". Ibu Ani merasa suaranya diabaikan dan kewenangannya diragukan. Ia sangat frustasi melihat angka pernikahan dini di desanya terus meningkat. 
+        <br><br><b>Pertanyaan Diskusi:</b> Bagaimana Ibu Ani bisa meyakinkan warga dan tokoh masyarakat? Strategi advokasi apa yang paling efektif untuknya, mengingat resistensi budaya yang kuat? Apa dampak jangka panjang jika program ini gagal diimplementasikan bagi kesehatan dan masa depan remaja di desa tersebut?`
+      },
+      {
+        title: "Pak Budi — Ayah Tunggal di Tengah Stigma",
+        text: `Sejak istrinya meninggal dua tahun lalu, Pak Budi (38 tahun) harus berperan ganda sebagai ayah sekaligus ibu bagi kedua anaknya yang masih balita. Ia bekerja serabutan sebagai buruh tani, dengan penghasilan yang pas-pasan. Setiap pagi, ia harus mengurus sarapan, memandikan, dan mengantar anaknya ke PAUD, seringkali terlambat kerja. Tetangga-tetangga seringkali mengasihani atau bahkan terang-terangan menyindirnya, "Kenapa tidak cari istri lagi saja, kasihan anak-anak butuh ibu." Ada stigma kuat di desanya bahwa mengurus anak-anak, terutama balita, adalah tugas perempuan. Pak Budi merasa kesepian, lelah, dan terbebani secara mental.
+        <br><br><b>Pertanyaan Diskusi:</b> Bagaimana kebijakan desa, misalnya terkait bantuan sosial atau fasilitas penitipan anak, dapat mendukung Pak Budi? Bentuk dukungan komunitas seperti apa yang bisa ditawarkan untuk meringankan bebannya dan mengatasi stigma? Apa konsekuensi jangka panjang bagi Pak Budi dan anak-anaknya jika ia terus menghadapi kesulitan ini tanpa dukungan?`
+      },
+      {
+        title: "Siti — Suara Perempuan Muda yang Diredam",
+        text: `Siti (20 tahun) adalah mahasiswi yang pulang kampung dan ingin berkontribusi aktif di Karang Taruna. Ia memiliki banyak ide inovatif untuk mengembangkan desa, seperti program digitalisasi UMKM dan pelatihan keterampilan. Namun, setiap kali ia mencoba menyampaikan gagasannya dalam rapat, ia sering dipotong, diabaikan, atau idenya dianggap terlalu "berani" untuk seorang perempuan muda. Bahkan, beberapa anggota laki-laki yang lebih tua sering melontarkan komentar meremehkan tentang penampilannya atau kemampuannya. Siti merasa suaranya tidak didengar dan ia mulai ragu untuk terus berpartisipasi.
+        <br><br><b>Pertanyaan Diskusi:</b> Strategi apa yang bisa Siti lakukan agar ide-idenya bisa diterima dan dihargai? Bagaimana ia bisa membangun jaringan dukungan di antara anggota Karang Taruna lain atau tokoh masyarakat yang lebih progresif? Apa konsekuensi yang mungkin terjadi jika Siti akhirnya menyerah dan berhenti mencoba memimpin atau berkontribusi?`
+      },
+      {
+        title: "Ahmad — Diskriminasi Ganda seorang Difabel Maskulin",
+        text: `Ahmad (25 tahun) adalah seorang pemuda difabel pengguna kursi roda sejak lahir. Ia memiliki semangat yang tinggi dan ingin aktif berolahraga serta bekerja di sektor publik. Namun, di desanya, ia menghadapi diskriminasi ganda. Selain karena difabilitasnya, ia juga sering dipandang "tidak maskulin" atau "lemah" karena tidak bisa melakukan pekerjaan fisik berat seperti laki-laki lain. Bangunan-bangunan umum di desa tidak memiliki aksesibilitas yang memadai, dan ia seringkali kesulitan bepergian. Beberapa kali ia mencoba melamar pekerjaan, namun selalu ditolak dengan alasan "tidak cocok" atau "merepotkan".
+        <br><br><b>Pertanyaan Diskusi:</b> Bagaimana diskriminasi ganda ini memengaruhi identitas dan peluang Ahmad? Bagaimana desa bisa memperbaiki aksesibilitas infrastruktur dan menciptakan ruang yang lebih inklusif baginya? Apa peran pendidikan dan kesadaran masyarakat untuk mengubah persepsi tentang maskulinitas dan difabilitas?`
+      },
+      {
+        title: "Rina — Mimpi Insinyur di Tengah Bias Gender",
+        text: `Rina (19 tahun) adalah mahasiswi teknik yang sangat cerdas. Sejak kecil, ia bercita-cita menjadi insinyur konstruksi, namun ia terus menghadapi komentar meremehkan dari lingkungan sekitar. Di kampus, dosen-dosen sering menantang kemampuannya dalam mata kuliah "berat", dan teman-teman laki-lakinya sering melontarkan lelucon bahwa teknik "bukan untuk perempuan". Di rumah, ibunya sering menyarankan untuk mencari jurusan yang lebih "feminin" agar mudah mendapatkan suami. Rina merasa tertekan dan harus bekerja dua kali lebih keras hanya untuk membuktikan bahwa ia layak.
+        <br><br><b>Pertanyaan Diskusi:</b> Bagaimana Rina bisa membuktikan dirinya dan menghadapi bias gender ini secara efektif, baik di kampus maupun di rumah? Dukungan apa yang sangat ia butuhkan dari teman, keluarga, atau institusi? Bagaimana kebijakan kampus dapat diubah untuk menciptakan lingkungan belajar yang lebih setara dan mendukung mahasiswa perempuan di bidang teknik?`
+      },
+      {
+        title: "Andi — Keberanian Menari dan Harga yang Harus Dibayar",
+        text: `Andi (14 tahun) adalah siswa SMP yang sangat menyukai seni tari tradisional. Ia mendaftar ekskul tari, namun sejak itu ia sering diejek dan di-bully oleh teman-teman laki-lakinya. Mereka mengatakan tari adalah "hobi perempuan" dan Andi "tidak jantan". Pelatih sepak bola bahkan pernah menyindirnya, "Laki-laki sejati itu main bola, bukan menari gemulai." Andi menjadi minder, sering bolos sekolah, dan prestasinya menurun. Ia merasa terjebak antara hasratnya pada seni dan tuntutan "maskulinitas" dari lingkungannya.
+        <br><br><b>Pertanyaan Diskusi:</b> Bagaimana stereotip maskulinitas yang kaku membatasi potensi dan ekspresi diri Andi? Bagaimana guru dan pihak sekolah dapat mendukung Andi dan menciptakan lingkungan yang aman dari bullying berbasis gender? Apa dampak psikologis jangka panjang dari bullying semacam ini terhadap kesehatan mental dan perkembangan identitas Andi?`
+      },
+      {
+        title: "Fatimah — Pergulatan Hak Warisan",
+        text: `Fatimah (30 tahun) adalah anak kedua dari tiga bersaudara, satu-satunya perempuan. Setelah ayahnya meninggal, ia berharap bisa mendapatkan bagian warisan yang adil sesuai hukum. Namun, kakak dan adiknya (keduanya laki-laki) serta paman-paman dari pihak ayah bersikukuh bahwa "sesuai adat, harta warisan harus jatuh ke anak laki-laki", atau bahwa "bagian perempuan itu hanya setengahnya". Fatimah tahu ini tidak sesuai dengan hukum negara, namun tekanan keluarga sangat besar. Ia diancam akan dikucilkan jika bersikeras. Ia juga khawatir perpecahan keluarga akan terjadi.
+        <br><br><b>Pertanyaan Diskusi:</b> Bagaimana aspek hukum dan budaya patriarki saling berinteraksi dalam kasus Fatimah? Strategi negosiasi apa yang dapat ditempuh Fatimah untuk memperjuangkan haknya tanpa sepenuhnya merusak hubungan keluarga? Apa peran lembaga bantuan hukum atau tokoh agama yang progresif dalam membantu Fatimah?`
+      },
+      {
+        title: "Joko — Guru TK Laki-laki dan Stigma Pekerjaan",
+        text: `Joko (28 tahun) adalah seorang guru lulusan Pendidikan Anak Usia Dini (PAUD). Ia sangat mencintai pekerjaannya mengajar di TK Mekar Jaya. Namun, ia seringkali menghadapi tatapan aneh dan komentar sinis dari orang tua murid maupun masyarakat sekitar. "Kok laki-laki ngajar di TK? Nggak ada kerjaan lain, ya?" atau bahkan ada yang terang-terangan menanyakan, "Apa nggak takut dicurigai macam-macam kalau dekat anak kecil terus?" Joko merasa kemampuannya diragukan hanya karena ia seorang laki-laki yang bekerja di bidang yang secara tradisional dianggap "pekerjaan perempuan". Ia mulai kehilangan semangat dan mempertanyakan pilihannya.
+        <br><br><b>Pertanyaan Diskusi:</b> Bagaimana norma dan stereotip gender membentuk persepsi masyarakat terhadap pekerjaan yang dianggap "maskulin" atau "feminin"? Apa yang bisa Joko lakukan untuk mendapatkan kepercayaan dari orang tua murid dan masyarakat? Bagaimana pihak sekolah dan dinas pendidikan dapat mendukung Joko dan mempromosikan kesetaraan gender dalam profesi?`
+      }
+    ];
+
+    function renderCases(){
+      const caseList=document.getElementById('caseList');
+      caseList.innerHTML='';
+      kasus.forEach(c=>{
+        const div=document.createElement('div');
+        div.className='case';
+        div.innerHTML=`<h3>${c.title}</h3><p>${c.text}</p>`;
+        caseList.appendChild(div);
+      });
+    }
+
+    // --- Fungsi untuk menyimpan data analisis kelompok ke Firebase ---
+    function saveGroupAnalysis(groupId, text) {
+      if (timeRemaining > 0 || !timerRunning) { // Hanya simpan jika timer masih berjalan atau belum dimulai/dihentikan
+        set(ref(database, 'group_analysis/' + groupId), {
+          analysis: text,
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        console.warn(`Tidak dapat menyimpan data untuk ${groupId}: Timer telah habis.`);
+      }
+    }
+
+    // --- Fungsi untuk memuat data analisis dari Firebase ---
+    function loadGroupAnalysis() {
+      const groups = document.querySelectorAll('.group-card textarea');
+      groups.forEach(textarea => {
+        const groupId = textarea.dataset.groupId;
+        if (groupId) {
+          const groupRef = ref(database, 'group_analysis/' + groupId);
+          onValue(groupRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data && data.analysis) {
+              if (document.activeElement !== textarea || textarea.value !== data.analysis) {
+                 textarea.value = data.analysis;
+              }
+            } else {
+              textarea.value = '';
+            }
+          });
+        }
+      });
+    }
+
+    // --- Fungsi untuk mengaktifkan/menonaktifkan semua textarea kelompok ---
+    function toggleTextareas(enable) {
+      const textareas = document.querySelectorAll('.group-card textarea');
+      textareas.forEach(textarea => {
+        textarea.disabled = !enable;
+        if (enable) {
+            textarea.classList.remove('disabled'); // Hapus class disabled jika ada
+        } else {
+            textarea.classList.add('disabled'); // Tambah class disabled
+        }
+      });
+    }
+
+    // --- Inisialisasi status tombol fasilitator ---
+    function initFasilitatorButtons() {
+        const fasilitatorButtons = document.querySelectorAll('[data-fasilitator-only="true"]');
+        fasilitatorButtons.forEach(button => {
+            // Secara default, nonaktifkan untuk "siswa".
+            // Fasilitator bisa mengaktifkannya manual via console jika perlu
+            // atau kita bisa menambahkan mekanisme login sederhana jika diperlukan.
+            button.disabled = true;
+            button.title = "Hanya Fasilitator yang dapat menggunakan ini";
+        });
+    }
+
+    // --- Logika untuk Fasilitator: Mengaktifkan tombol secara manual (misal via console) ---
+    // Fasilitator dapat menjalankan `enableFasilitatorMode()` di console browser.
+    window.enableFasilitatorMode = () => {
+        const fasilitatorButtons = document.querySelectorAll('[data-fasilitator-only="true"]');
+        fasilitatorButtons.forEach(button => {
+            button.disabled = false;
+            button.removeAttribute('title');
+        });
+        alert('Mode Fasilitator diaktifkan. Tombol "Bagi Kelompok" dan "Bagikan Kasus" kini aktif.');
+    };
+    // Fasilitator juga bisa mengaktifkan kembali kolom input jika timer sudah habis
+    window.enableGroupInputs = () => {
+        toggleTextareas(true);
+        alert('Input kelompok diaktifkan kembali.');
+    }
+    window.disableGroupInputs = () => {
+        toggleTextareas(false);
+        alert('Input kelompok dinonaktifkan.');
+    }
+
+    document.getElementById('btnDivide').addEventListener('click', async ()=>{
+      const groupsArea=document.getElementById('groupsArea');
+      groupsArea.innerHTML='';
+      const size=8;
+      const groupL=chunk(peserta.filter(p=>p.gender==='L'), size);
+      const groupP=chunk(peserta.filter(p=>p.gender==='P'), size);
+      let groupCounter = 0;
+      const currentGroupConfig = []; // Simpan konfigurasi kelompok yang baru dibuat
+
+      [...groupL,...groupP].forEach((g,i)=>{
+        groupCounter++;
+        const groupId = `kelompok_${groupCounter}`;
+        const div=document.createElement('div');
+        div.className='group-card';
+        const membersHtml = g.map(p=>`<li>${p.nama}</li>`).join('');
+        div.innerHTML=`<strong>Kelompok ${i+1}</strong><ul>${membersHtml}</ul><textarea data-group-id="${groupId}" placeholder='Tuliskan analisis, solusi, dan refleksi kelompok'></textarea>`;
+        groupsArea.appendChild(div);
+
+        currentGroupConfig.push({
+            id: groupId,
+            name: `Kelompok ${i+1}`,
+            members: g.map(p => p.nama),
+            case: null // Kasus akan diisi saat btnAssign diklik
+        });
+      });
+
+      // Simpan konfigurasi kelompok ke Firebase
+      await set(ref(database, GROUP_CONFIG_DB_PATH), currentGroupConfig);
+
+      // Setelah membuat textarea, tambahkan event listener dan muat data
+      const textareas = groupsArea.querySelectorAll('textarea');
+      textareas.forEach(textarea => {
+        textarea.addEventListener('input', (event) => {
+          const groupId = event.target.dataset.groupId;
+          saveGroupAnalysis(groupId, event.target.value);
+        });
+      });
+
+      loadGroupAnalysis(); // Muat data setelah kelompok dibagi
+      toggleTextareas(true); // Aktifkan textarea saat kelompok baru dibagi
+      alert("Kelompok berhasil dibagi dan input diaktifkan.");
+    });
+
+    document.getElementById('btnAssign').addEventListener('click', async ()=>{
+      const groups=document.querySelectorAll('.group-card');
+      const groupConfigSnapshot = await get(ref(database, GROUP_CONFIG_DB_PATH));
+      const currentGroupConfig = groupConfigSnapshot.val() || [];
+
+      groups.forEach((g,i)=>{
+        const assignedCaseIndex = i % kasus.length; // Pastikan kasus tidak berulang jika kelompok lebih banyak dari kasus
+        const k=kasus[assignedCaseIndex];
+
+        // Cek apakah kasus sudah ada di kelompok ini
+        if (!g.querySelector('.case')) {
+          const caseBox=document.createElement('div');
+          caseBox.className='case';
+          caseBox.innerHTML=`<h3>${k.title}</h3><p>${k.text}</p>`;
+          
+          const ulElement = g.querySelector('ul');
+          const textareaElement = g.querySelector('textarea');
+          if (ulElement && textareaElement) {
+              g.insertBefore(caseBox, textareaElement);
+          } else if (ulElement) {
+              g.appendChild(caseBox);
+          } else {
+              g.prepend(caseBox);
+          }
+        }
+
+        // Update konfigurasi kelompok di Firebase dengan kasus yang dibagikan
+        const groupId = g.querySelector('textarea')?.dataset.groupId;
+        if (groupId) {
+            const groupIndex = currentGroupConfig.findIndex(gc => gc.id === groupId);
+            if (groupIndex !== -1) {
+                currentGroupConfig[groupIndex].case = { title: k.title, text: k.text };
+            }
+        }
+      });
+      await set(ref(database, GROUP_CONFIG_DB_PATH), currentGroupConfig);
+      alert("Kasus berhasil dibagikan.");
+    });
+
+    function chunk(arr,size){
+      const res=[]; for(let i=0;i<arr.length;i+=size){res.push(arr.slice(i,i+size))} return res;
+    }
+
+    // --- Timer Logic ---
+    let timerInterval=null; // Pindahkan ke atas agar bisa diakses global
+    const timerDisplay = document.getElementById('timerDisplay');
+    const timerMinutesInput = document.getElementById('timerMinutes');
+
+    function updateDisplay(s){
+        const mm=String(Math.floor(s/60)).padStart(2,'0');
+        const ss=String(s%60).padStart(2,'0');
+        timerDisplay.textContent=`${mm}:${ss}`;
+    }
+
+    // Fungsi untuk memperbarui status timer di Firebase
+    function updateTimerInFirebase(status, time, startedAt = null) {
+        set(ref(database, TIMER_DB_PATH), {
+            status: status, // 'running', 'paused', 'stopped', 'finished'
+            timeRemaining: time,
+            lastUpdated: new Date().toISOString(),
+            startedAt: startedAt // Waktu mulai untuk sinkronisasi
+        });
+    }
+
+    // Listener untuk perubahan timer dari Firebase
+    onValue(ref(database, TIMER_DB_PATH), (snapshot) => {
+        const timerData = snapshot.val();
+        if (timerData) {
+            let remoteTimeRemaining = timerData.timeRemaining;
+            let remoteStatus = timerData.status;
+
+            if (remoteStatus === 'running' && timerData.startedAt) {
+                const elapsed = Math.floor((new Date().getTime() - new Date(timerData.startedAt).getTime()) / 1000);
+                remoteTimeRemaining = Math.max(0, timerData.timeRemaining - elapsed);
+            }
+
+            // Update UI timer
+            updateDisplay(remoteTimeRemaining);
+            timeRemaining = remoteTimeRemaining; // Sinkronkan variabel global
+
+            // Atur status textarea berdasarkan timer
+            if (remoteTimeRemaining <= 0 && remoteStatus !== 'paused') { // Jika waktu habis DAN bukan di-pause
+                toggleTextareas(false); // Nonaktifkan textarea
+                if (timerInterval) clearInterval(timerInterval); // Hentikan interval jika masih berjalan
+                timerRunning = false;
+                if (remoteStatus !== 'finished') { // Pastikan status di Firebase juga 'finished'
+                    updateTimerInFirebase('finished', 0);
+                }
+            } else if (remoteStatus === 'running' && !timerRunning) {
+                // Jika remote running tapi lokal tidak, mulai timer lokal
+                startLocalTimer(remoteTimeRemaining);
+                toggleTextareas(true); // Aktifkan textarea
+            } else if (remoteStatus === 'paused' || remoteStatus === 'stopped' || remoteStatus === 'finished') {
+                if (timerInterval) clearInterval(timerInterval);
+                timerRunning = false;
+                if (remoteStatus === 'finished' || remoteStatus === 'stopped') {
+                     toggleTextareas(false); // Nonaktifkan jika berhenti atau selesai
+                } else if (remoteStatus === 'paused') {
+                     toggleTextareas(true); // Biarkan aktif jika dipause (fasilitator bisa menambah waktu)
+                }
+            }
+        } else {
+            // Jika tidak ada data timer di Firebase, reset lokal
+            clearInterval(timerInterval);
+            timerInterval = null;
+            timerRunning = false;
+            timeRemaining = 0;
+            updateDisplay(0);
+            toggleTextareas(false); // Nonaktifkan textarea secara default
+        }
+    });
+
+    // Fungsi untuk memulai timer lokal
+    function startLocalTimer(initialTime) {
+        if (timerInterval) clearInterval(timerInterval);
+        timeRemaining = initialTime;
+        timerRunning = true;
+        timerInterval = setInterval(() => {
+            timeRemaining--;
+            updateDisplay(timeRemaining);
+            if (timeRemaining <= 0) {
+                clearInterval(timerInterval);
+                timerRunning = false;
+                alert('Waktu habis!');
+                updateDisplay(0);
+                toggleTextareas(false); // Nonaktifkan textarea saat waktu habis
+                updateTimerInFirebase('finished', 0); // Update status di Firebase
+            }
+        }, 1000);
+    }
+
+    document.getElementById('btnStart').addEventListener('click',()=>{
+        const initialMinutes = parseInt(timerMinutesInput.value);
+        timeRemaining = initialMinutes * 60;
+        updateTimerInFirebase('running', timeRemaining, new Date().toISOString());
+        toggleTextareas(true); // Aktifkan textarea saat timer dimulai
+    });
+
+    document.getElementById('btnPause').addEventListener('click',()=>{
+        clearInterval(timerInterval);
+        timerRunning = false;
+        updateTimerInFirebase('paused', timeRemaining);
+        // Biarkan textarea tetap aktif saat pause, untuk fleksibilitas fasilitator
+        // toggleTextareas(false);
+    });
+
+    document.getElementById('btnStop').addEventListener('click',()=>{
+        clearInterval(timerInterval);
+        timerInterval = null;
+        timerRunning = false;
+        timeRemaining = 0; // Reset waktu
+        updateDisplay(0);
+        updateTimerInFirebase('stopped', 0);
+        toggleTextareas(false); // Nonaktifkan textarea saat stop
+    });
+
+    // Fungsi Reset Data Firebase
+    document.getElementById('btnReset').addEventListener('click', async () => {
+        if (confirm("Apakah Anda yakin ingin mereset semua data aktivitas (termasuk di Firebase) dan susunan kelompok?")) {
+            try {
+                // Hapus data analisis kelompok
+                await set(ref(database, 'group_analysis'), null);
+                // Hapus konfigurasi kelompok
+                await set(ref(database, GROUP_CONFIG_DB_PATH), null);
+                // Hapus status timer
+                await set(ref(database, TIMER_DB_PATH), null);
+
+                console.log("Data Firebase berhasil direset.");
+                document.getElementById('groupsArea').innerHTML = '';
+                document.getElementById('numPeserta').value = '36';
+                clearInterval(timerInterval);
+                timerInterval = null;
+                timerRunning = false;
+                timeRemaining = 0;
+                updateDisplay(0);
+                toggleTextareas(false); // Nonaktifkan semua textarea
+                initFasilitatorButtons(); // Reset status tombol fasilitator
+                alert("Reset berhasil. Silakan 'Bagi Kelompok' lagi.");
+            } catch (error) {
+                console.error("Gagal mereset data Firebase:", error);
+                alert("Gagal mereset data. Periksa konsol untuk detail.");
+            }
+        }
+    });
+
+    // Fungsi Export ke CSV (tetap sama, hanya penyesuaian untuk data case dari Firebase)
+    document.getElementById('btnExport').addEventListener('click', () => {
+        const groupsData = [];
+        const groupsRef = ref(database, 'group_analysis');
+        const groupConfigRef = ref(database, GROUP_CONFIG_DB_PATH);
+
+        Promise.all([get(groupsRef), get(groupConfigRef)])
+            .then(([analysisSnapshot, configSnapshot]) => {
+                const analysisData = analysisSnapshot.val();
+                const configData = configSnapshot.val();
+
+                if (configData) {
+                    configData.forEach(config => {
+                        const analysis = analysisData ? analysisData[config.id] : null;
+                        let caseTitle = config.case ? config.case.title : 'N/A';
+                        let caseText = config.case ? config.case.text.replace(/\r?\n|\r/g, " ").replace(/<br\s*\/?>/g, " ") : 'N/A';
+
+                        groupsData.push({
+                            'Group ID': config.id,
+                            'Nama Kelompok': config.name,
+                            'Nama Kasus': caseTitle,
+                            'Deskripsi Kasus': caseText,
+                            'Anggota Kelompok': config.members ? config.members.join('; ') : 'N/A',
+                            'Analisis Kelompok': analysis && analysis.analysis ? analysis.analysis.replace(/"/g, '""') : '',
+                            'Timestamp Terakhir Update': analysis && analysis.timestamp ? analysis.timestamp : ''
+                        });
+                    });
+                }
+
+                if (groupsData.length > 0) {
+                    let csvContent = "data:text/csv;charset=utf-8,";
+                    const headers = Object.keys(groupsData[0]);
+                    csvContent += headers.map(header => `"${header}"`).join(',') + '\r\n';
+
+                    groupsData.forEach(row => {
+                        const values = headers.map(header => {
+                            let val = String(row[header] || '');
+                            if (val.includes(',') || val.includes('"') || val.includes('\n') || val.includes('\r')) {
+                                val = `"${val.replace(/"/g, '""')}"`;
+                            }
+                            return val;
+                        });
+                        csvContent += values.join(',') + '\r\n';
+                    });
+
+                    const encodedUri = encodeURI(csvContent);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", encodedUri);
+                    link.setAttribute("download", "hasil_aktivitas_walk_in_her_shoes.csv");
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    alert("Data berhasil diunduh dalam format CSV!");
+
+                } else {
+                    alert("Tidak ada data kelompok untuk diekspor.");
+                }
+            })
+            .catch(error => {
+                console.error("Gagal mengambil data untuk ekspor:", error);
+                alert("Gagal mengambil data untuk ekspor. Periksa konsol.");
+            });
+    });
+
+    // Fungsi Unduh Instruksi (tetap sama)
+    document.getElementById('btnDownload').addEventListener('click', () => {
+      alert("Fitur Unduh Instruksi belum diimplementasikan secara penuh. Harap salin petunjuk dari halaman ini.");
+    });
+
+
+    // --- Inisialisasi awal saat DOM siap ---
+    document.addEventListener('DOMContentLoaded', async () => {
+        renderCases();
+        initFasilitatorButtons(); // Nonaktifkan tombol fasilitator untuk "siswa"
+
+        // Muat konfigurasi kelompok yang mungkin sudah ada dari Firebase
+        const groupConfigSnapshot = await get(ref(database, GROUP_CONFIG_DB_PATH));
+        const savedGroupConfig = groupConfigSnapshot.val();
+
+        if (savedGroupConfig) {
+            const groupsArea = document.getElementById('groupsArea');
+            groupsArea.innerHTML = ''; // Kosongkan dulu
+
+            savedGroupConfig.forEach((config, i) => {
+                const div = document.createElement('div');
+                div.className = 'group-card';
+                const membersHtml = config.members.map(nama => `<li>${nama}</li>`).join('');
+                div.innerHTML = `<strong>${config.name}</strong><ul>${membersHtml}</ul><textarea data-group-id="${config.id}" placeholder='Tuliskan analisis, solusi, dan refleksi kelompok'></textarea>`;
+                
+                // Tambahkan kasus jika sudah ada di konfigurasi
+                if (config.case) {
+                    const caseBox = document.createElement('div');
+                    caseBox.className = 'case';
+                    caseBox.innerHTML = `<h3>${config.case.title}</h3><p>${config.case.text}</p>`;
+                    const ulElement = div.querySelector('ul');
+                    const textareaElement = div.querySelector('textarea');
+                    if (ulElement && textareaElement) {
+                        div.insertBefore(caseBox, textareaElement);
+                    } else if (ulElement) {
+                        div.appendChild(caseBox);
+                    } else {
+                        div.prepend(caseBox);
+                    }
+                }
+                groupsArea.appendChild(div);
+            });
+
+            // Tambahkan event listener untuk textarea yang dimuat dari Firebase
+            const textareas = groupsArea.querySelectorAll('textarea');
+            textareas.forEach(textarea => {
+                textarea.addEventListener('input', (event) => {
+                    const groupId = event.target.dataset.groupId;
+                    saveGroupAnalysis(groupId, event.target.value);
+                });
+            });
+            loadGroupAnalysis(); // Muat analisis yang sudah ada
+        }
+    });
+
+  </script>
+</body>
+</html>
