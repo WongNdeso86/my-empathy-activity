@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ramadan Companion — Via & Fendi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script defer type="module" src="assets/app.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar card">
+      <div>
+        <p class="eyebrow">Ramadan 2026</p>
+        <h1>Planner & Tracker Via + Fendi</h1>
+      </div>
+      <div class="pill">Dark mode default</div>
+    </header>
+
+    <section class="home-summary card" id="homeSummary">
+      <article>
+        <p>Hari Ramadan</p>
+        <h2 id="ramadanDay">Day -</h2>
+      </article>
+      <article>
+        <p>Terakhir sampai</p>
+        <h3 id="lastProgress">Belum ada data</h3>
+      </article>
+      <article>
+        <p>Unique Juz Tersentuh</p>
+        <h3 id="uniqueJuzSummary">0/30</h3>
+        <div class="progress"><span id="juzProgressBar"></span></div>
+      </article>
+      <article>
+        <p>Status penyimpanan</p>
+        <h3 id="saveStatus">Idle</h3>
+      </article>
+    </section>
+
+    <nav class="tabs card" role="tablist">
+      <button class="tab-btn active" data-tab="jadwal" role="tab">Jadwal</button>
+      <button class="tab-btn" data-tab="tracker" role="tab">Tracker</button>
+      <button class="tab-btn" data-tab="stats" role="tab">Stats</button>
+    </nav>
+
+    <main>
+      <section class="tab-panel active" id="tab-jadwal">
+        <div class="card section-head">
+          <h2>Tab 1 — Jadwal Ramadan (Day 1–30)</h2>
+          <button id="printScheduleBtn" class="btn">Print Jadwal (PDF)</button>
+        </div>
+        <div id="scheduleContainer" class="schedule-grid"></div>
+      </section>
+
+      <section class="tab-panel" id="tab-tracker">
+        <div class="card section-head tracker-actions">
+          <h2>Tab 2 — Tracker</h2>
+          <div class="button-row">
+            <button id="downloadPngBtn" class="btn">Download PNG Hari Ini</button>
+            <button id="exportJsonBtn" class="btn btn-secondary">Export JSON</button>
+            <label class="import-label btn btn-secondary">Import JSON
+              <input id="importJsonInput" type="file" accept="application/json" hidden>
+            </label>
+          </div>
+        </div>
+        <div id="trackerContainer" class="tracker-list"></div>
+      </section>
+
+      <section class="tab-panel" id="tab-stats">
+        <div class="card section-head">
+          <h2>Tab 3 — Stats</h2>
+          <button id="printStatsBtn" class="btn">Print Stats (PDF)</button>
+        </div>
+        <section class="stats-cards" id="statsCards"></section>
+        <section class="card">
+          <h3>Target vs Actual per Hari</h3>
+          <canvas id="statsChart" height="180"></canvas>
+        </section>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
