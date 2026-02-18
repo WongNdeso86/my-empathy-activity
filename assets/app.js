@@ -194,7 +194,7 @@ function renderTracker() {
         <div class="button-row">
           <button class="btn" data-action="start" data-day="${day.day}" data-session="${idx}">Mulai sesi</button>
           <button class="btn btn-secondary" data-action="end" data-day="${day.day}" data-session="${idx}">Akhiri sesi</button>
-          <button class="btn btn-secondary" data-action="delete" data-day="${day.day}" data-session="${idx}">Delete entry</button>
+          <button class="btn btn-secondary" data-action="delete" data-day="${day.day}" data-session="${idx}">Hapus tracking</button>
         </div>
         <div class="session-grid">
           ${inputField('Actual Start', 'actualStart', session.actualStart, true)}
@@ -239,6 +239,26 @@ function onSessionAction(e) {
   if (action === 'start') session.actualStart = formatTime(now);
   if (action === 'end') session.actualEnd = formatTime(now);
   if (action === 'delete') {
+    const hasTrackedData = Boolean(
+      session.actualStart ||
+      session.actualEnd ||
+      session.surahStart ||
+      session.ayatStart ||
+      session.surahEnd ||
+      session.ayatEnd ||
+      session.juzStart ||
+      session.juzEnd ||
+      (session.uniqueJuz && session.uniqueJuz.length)
+    );
+
+    if (!hasTrackedData) {
+      alert('Belum ada data tracking untuk dihapus pada sesi ini.');
+      return;
+    }
+
+    const confirmed = window.confirm('Yakin ingin menghapus data tracking sesi ini? Aksi ini tidak bisa dibatalkan.');
+    if (!confirmed) return;
+
     const keep = { plannedStart: session.plannedStart, plannedEnd: session.plannedEnd, type: session.type };
     state.days[day].sessions[idx] = { ...buildInitialState([{ day, sessions: [{ start: keep.plannedStart, end: keep.plannedEnd }] }]).days[day].sessions[0], ...keep };
   }
