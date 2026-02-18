@@ -34,6 +34,9 @@ body {
 .topbar h1 { margin: 6px 0 0; font-size: clamp(1.4rem, 2.5vw, 2rem); }
 .eyebrow { color: var(--muted); margin: 0; }
 .pill { background: var(--surface-2); border: 1px solid var(--border); padding: 8px 12px; border-radius: 999px; color: var(--muted); }
+.header-right { display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+.wib-now { color: var(--text); font-size: .9rem; font-weight: 600; }
+.stopwatch-line strong { letter-spacing: .06em; }
 .home-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .home-summary article { padding: 6px; }
 .home-summary p { color: var(--muted); margin: 0 0 6px; }
@@ -83,6 +86,7 @@ label { font-size: .82rem; color: var(--muted); display:block; }
 @media (max-width: 700px) {
   .app-shell { margin-top: 14px; }
   .topbar { flex-direction: column; align-items: flex-start; }
+  .header-right { align-items: flex-start; }
 }
 
 @media print {

@@ -1,6 +1,6 @@
 const START_DATE = new Date('2026-02-19T00:00:00');
 const RAMADAN_DAYS = 30;
-const STORAGE_KEY = 'ramadan-tracker-v2';
+const STORAGE_KEY = 'ramadan-tracker-v3';
 const DB_NAME = 'ramadan_tracker_db';
 const STORE = 'state';
 
@@ -16,6 +16,7 @@ let surahData = [];
 let juzBoundaries = [];
 let scheduleDays = [];
 let state = { days: {}, history: [], savedAt: '' };
+let tickHandle = null;
 
 const $ = (sel) => document.querySelector(sel);
 const saveStatusEl = $('#saveStatus');
@@ -34,11 +35,11 @@ async function init() {
   bindTabs();
   bindGlobalButtons();
   renderSchedule();
-  renderSchedule();
   renderTrackerToday();
   renderHistory();
   renderStats();
   renderHomeSummary();
+  startGlobalClock();
 }
 
 function buildRamadanSchedule() {
@@ -57,7 +58,6 @@ function buildRamadanSchedule() {
       ...toBlocks(viaClasses[dow] || [], 'via', 'Kelas Via'),
       ...toBlocks(fendiClasses[dow] || [], 'fendi', 'Kelas Fendi')
     ];
-
     if (isWeekend) blocks.push({ type: 'weekend', label: 'Buka–Tidur', start: '18:00', end: '22:30' });
 
     const khatam = sessionsTemplate.map(([start, end], idx) => {
@@ -103,9 +103,13 @@ function buildInitialState(schedule) {
         plannedStart: s.start,
         plannedEnd: s.end,
         trackDateISO: d.dateISO,
-        actualStart: s.start,
-        actualEnd: s.end,
-        durationMin: Math.max(0, timeToMin(s.end) - timeToMin(s.start)),
+        actualStart: '',
+        actualEnd: '',
+        durationMin: 0,
+        stopwatchSeconds: 0,
+        isRunning: false,
+        isStopped: false,
+        runStartedAtISO: '',
         surahStart: '', ayatStart: '', surahEnd: '', ayatEnd: '',
         juzStart: '', juzEnd: '', uniqueJuz: [],
         type: 'Bareng (Via + Fendi)',
@@ -125,6 +129,39 @@ function bindTabs() {
       $(`#tab-${btn.dataset.tab}`).classList.add('active');
     });
   });
+}
+
+function startGlobalClock() {
+  updateHeaderClock();
+  if (tickHandle) clearInterval(tickHandle);
+  tickHandle = setInterval(() => {
+    updateHeaderClock();
+    let hasRunning = false;
+    Object.values(state.days).forEach(day => {
+      (day.sessions || []).forEach(session => {
+        if (!session.isRunning || !session.runStartedAtISO) return;
+        hasRunning = true;
+        const elapsed = Math.max(0, Math.floor((Date.now() - new Date(session.runStartedAtISO).getTime()) / 1000));
+        session.stopwatchSeconds = elapsed;
+        session.durationMin = Math.floor(elapsed / 60);
+      });
+    });
+    if (hasRunning) renderTrackerToday();
+  }, 1000);
+}
+
+function updateHeaderClock() {
+  const now = new Date();
+  const dateText = new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    weekday: 'long', day: '2-digit', month: 'long', year: 'numeric'
+  }).format(now);
+  const timeText = new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+  }).format(now);
+  const el = $('#wibNow');
+  if (el) el.textContent = `${dateText} • ${timeText} WIB`;
 }
 
 function renderSchedule() {
@@ -171,30 +208,33 @@ function renderTrackerToday() {
   section.className = 'card tracker-day';
   section.innerHTML = `
     <h3>Tracker Hari Ini — Day ${today}</h3>
-    <p class="small">Tanggal: ${formatDate(sched.dateISO)} • Sesi otomatis: ${sched.sessions.length} • Jam otomatis sesuai jadwal.</p>
+    <p class="small">Tanggal: ${formatDate(sched.dateISO)} • Start untuk mulai stopwatch, lalu Stop, kemudian isi Surah/Ayat.</p>
   `;
 
   dayState.sessions.forEach((session, idx) => {
+    const disabledInputs = !session.isStopped ? 'disabled' : '';
     const card = document.createElement('div');
     card.className = 'session-card';
     card.innerHTML = `
       <strong>Sesi ${idx + 1} — ${session.type}</strong>
-      <p class="small">Tanggal otomatis: ${formatDate(session.trackDateISO)}</p>
-      <p class="small">Jadwal: ${session.plannedStart}–${session.plannedEnd} (durasi rencana ${session.durationMin} menit)</p>
-      <label>Jam mulai pelaksanaan (otomatis end by durasi rencana)
-        <input data-day="${today}" data-session="${idx}" data-field="actualStart" value="${session.actualStart}" placeholder="contoh: 09:00">
-      </label>
-      <p class="small">Pelaksanaan (hasil): ${session.actualStart}–${session.actualEnd}</p>
+      <p class="small">Jadwal: ${session.plannedStart}–${session.plannedEnd}</p>
+      <p class="small">Waktu pelaksanaan: ${session.actualStart || '-'}–${session.actualEnd || '-'}</p>
+      <p class="small stopwatch-line">Stopwatch: <strong>${formatStopwatch(session.stopwatchSeconds || 0)}</strong></p>
+      <div class="button-row">
+        <button class="btn" data-action="start-session" data-day="${today}" data-session="${idx}" ${session.isRunning ? 'disabled' : ''}>Start</button>
+        <button class="btn btn-secondary" data-action="stop-session" data-day="${today}" data-session="${idx}" ${!session.isRunning ? 'disabled' : ''}>Stop</button>
+      </div>
       <div class="session-grid">
-        ${inputField('Surah start', 'surahStart', session.surahStart, false, 'surahList', today, idx)}
-        ${inputField('Ayat start', 'ayatStart', session.ayatStart, false, '', today, idx)}
-        ${inputField('Surah end', 'surahEnd', session.surahEnd, false, 'surahList', today, idx)}
-        ${inputField('Ayat end', 'ayatEnd', session.ayatEnd, false, '', today, idx)}
-        ${inputField('Juz start', 'juzStart', session.juzStart, true, '', today, idx)}
-        ${inputField('Juz end', 'juzEnd', session.juzEnd, true, '', today, idx)}
+        ${inputField('Surah start', 'surahStart', session.surahStart, false, 'surahList', today, idx, disabledInputs)}
+        ${inputField('Ayat start', 'ayatStart', session.ayatStart, false, '', today, idx, disabledInputs)}
+        ${inputField('Surah end', 'surahEnd', session.surahEnd, false, 'surahList', today, idx, disabledInputs)}
+        ${inputField('Ayat end', 'ayatEnd', session.ayatEnd, false, '', today, idx, disabledInputs)}
+        ${inputField('Juz start', 'juzStart', session.juzStart, true, '', today, idx, '')}
+        ${inputField('Juz end', 'juzEnd', session.juzEnd, true, '', today, idx, '')}
       </div>
       <div class="button-row">
-        <button class="btn" data-action="save-track" data-day="${today}" data-session="${idx}">Simpan tracking</button>
+        <button class="btn" data-action="save-track" data-day="${today}" data-session="${idx}" ${!session.isStopped ? 'disabled' : ''}>Simpan tracking</button>
+        <button class="btn btn-secondary" data-action="reset-session" data-day="${today}" data-session="${idx}">Reset</button>
       </div>
       <p class="small">Tracked at: ${session.trackedAt || '-'}</p>
       <p class="small">Unique juz sesi ini: ${(session.uniqueJuz || []).join(', ') || '-'}</p>
@@ -204,9 +244,12 @@ function renderTrackerToday() {
 
   root.appendChild(section);
   root.querySelectorAll('input[data-field]').forEach(inp => {
-    if (!inp.readOnly) inp.addEventListener('input', onProgressInput);
+    if (!inp.readOnly && !inp.disabled) inp.addEventListener('input', onProgressInput);
   });
+  root.querySelectorAll('button[data-action="start-session"]').forEach(btn => btn.addEventListener('click', onStartSession));
+  root.querySelectorAll('button[data-action="stop-session"]').forEach(btn => btn.addEventListener('click', onStopSession));
   root.querySelectorAll('button[data-action="save-track"]').forEach(btn => btn.addEventListener('click', onSaveTrack));
+  root.querySelectorAll('button[data-action="reset-session"]').forEach(btn => btn.addEventListener('click', onResetSession));
 }
 
 function renderHistory() {
@@ -238,8 +281,62 @@ function renderHistory() {
   });
 }
 
-function inputField(label, field, value, readOnly, list, day, idx) {
-  return `<label>${label}<input ${list ? `list="${list}"` : ''} data-day="${day}" data-session="${idx}" data-field="${field}" value="${value ?? ''}" ${readOnly ? 'readonly' : ''}></label>`;
+function inputField(label, field, value, readOnly, list, day, idx, extraAttr = '') {
+  return `<label>${label}<input ${list ? `list="${list}"` : ''} data-day="${day}" data-session="${idx}" data-field="${field}" value="${value ?? ''}" ${readOnly ? 'readonly' : ''} ${extraAttr}></label>`;
+}
+
+function onStartSession(e) {
+  const day = Number(e.target.dataset.day);
+  const idx = Number(e.target.dataset.session);
+  const session = state.days[day].sessions[idx];
+  if (session.isRunning) return;
+  session.isRunning = true;
+  session.isStopped = false;
+  session.runStartedAtISO = new Date().toISOString();
+  session.actualStart = formatTimeWIB(new Date());
+  session.actualEnd = '';
+  session.stopwatchSeconds = 0;
+  session.durationMin = 0;
+  renderTrackerToday();
+}
+
+function onStopSession(e) {
+  const day = Number(e.target.dataset.day);
+  const idx = Number(e.target.dataset.session);
+  const session = state.days[day].sessions[idx];
+  if (!session.isRunning) return;
+
+  const elapsed = Math.max(0, Math.floor((Date.now() - new Date(session.runStartedAtISO).getTime()) / 1000));
+  session.stopwatchSeconds = elapsed;
+  session.durationMin = Math.floor(elapsed / 60);
+  session.actualEnd = formatTimeWIB(new Date());
+  session.isRunning = false;
+  session.isStopped = true;
+  renderTrackerToday();
+}
+
+function onResetSession(e) {
+  const day = Number(e.target.dataset.day);
+  const idx = Number(e.target.dataset.session);
+  const session = state.days[day].sessions[idx];
+  if (!window.confirm('Reset sesi ini? Stopwatch dan input surah/ayat akan dihapus.')) return;
+
+  session.actualStart = '';
+  session.actualEnd = '';
+  session.durationMin = 0;
+  session.stopwatchSeconds = 0;
+  session.isRunning = false;
+  session.isStopped = false;
+  session.runStartedAtISO = '';
+  session.surahStart = '';
+  session.ayatStart = '';
+  session.surahEnd = '';
+  session.ayatEnd = '';
+  session.juzStart = '';
+  session.juzEnd = '';
+  session.uniqueJuz = [];
+  session.trackedAt = '';
+  renderTrackerToday();
 }
 
 function onProgressInput(e) {
@@ -249,17 +346,8 @@ function onProgressInput(e) {
   const session = state.days[day].sessions[idx];
 
   card.querySelectorAll('input[data-field]').forEach(inp => {
-    if (!inp.readOnly) session[inp.dataset.field] = inp.value.trim();
+    if (!inp.readOnly && !inp.disabled) session[inp.dataset.field] = inp.value.trim();
   });
-
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(session.actualStart)) {
-    session.actualEnd = '';
-  } else {
-    const plannedDuration = Math.max(0, timeToMin(session.plannedEnd) - timeToMin(session.plannedStart));
-    session.durationMin = plannedDuration;
-    session.actualEnd = minToTime(timeToMin(session.actualStart) + plannedDuration);
-  }
-
   validateAndComputeJuz(session);
   renderHomeSummary();
 }
@@ -268,6 +356,12 @@ async function onSaveTrack(e) {
   const day = Number(e.target.dataset.day);
   const idx = Number(e.target.dataset.session);
   const session = state.days[day].sessions[idx];
+
+  if (session.isRunning || !session.isStopped) {
+    alert('Tekan Stop dulu sebelum simpan tracking.');
+    return;
+  }
+
   const valid = validateAndComputeJuz(session);
   if (!valid) {
     alert('Isi Surah & Ayat mulai-akhir dengan valid dulu ya.');
@@ -276,11 +370,6 @@ async function onSaveTrack(e) {
 
   const trackedAtISO = new Date().toISOString();
   session.trackedAt = new Date(trackedAtISO).toLocaleString('id-ID');
-
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(session.actualStart)) {
-    alert('Jam mulai pelaksanaan harus format HH:MM, contoh 09:00.');
-    return;
-  }
 
   const historyItem = {
     id: `${day}-${idx}`,
@@ -418,7 +507,7 @@ function bindGlobalButtons() {
 async function downloadTodayPNG() {
   const day = clampDay(getRamadanDayNumber(new Date()));
   const sessions = state.days[day].sessions;
-  const lines = sessions.map((s, i) => `Sesi ${i + 1} | ${s.actualStart}-${s.actualEnd} | ${s.surahStart || '-'}:${s.ayatStart || '-'} → ${s.surahEnd || '-'}:${s.ayatEnd || '-'} | Juz ${s.juzStart || '-'}-${s.juzEnd || '-'}`);
+  const lines = sessions.map((s, i) => `Sesi ${i + 1} | ${s.actualStart || '-'}-${s.actualEnd || '-'} | ${s.surahStart || '-'}:${s.ayatStart || '-'} → ${s.surahEnd || '-'}:${s.ayatEnd || '-'} | Juz ${s.juzStart || '-'}-${s.juzEnd || '-'}`);
 
   const card = document.createElement('div');
   card.className = 'share-card';
@@ -439,11 +528,23 @@ function getJuzForPos(pos) { let juz = 1; juzBoundaries.forEach((j, i) => { if (
 function getRamadanDayNumber(date) { return Math.floor((new Date(date.toDateString()) - START_DATE) / 86400000) + 1; }
 function clampDay(d) { return Math.min(RAMADAN_DAYS, Math.max(1, d)); }
 function timeToMin(t) { const [h, m] = t.split(':').map(Number); return h * 60 + m; }
-function minToTime(n) { return `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`; }
+function minToTime(n) { return `${String(Math.floor(n / 60) % 24).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`; }
 function formatDate(iso) { return new Date(iso).toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }); }
+function formatStopwatch(totalSeconds) {
+  const h = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+  const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+  const s = String(totalSeconds % 60).padStart(2, '0');
+  return `${h}:${m}:${s}`;
+}
+function formatTimeWIB(d) {
+  return new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+  }).format(d);
+}
 
 async function persistAndRerender() {
-  state.savedAt = new Date().toLocaleTimeString('id-ID');
+  state.savedAt = formatTimeWIB(new Date());
   await saveState(state);
   renderSchedule();
   renderTrackerToday();
