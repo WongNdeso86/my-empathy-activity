@@ -44,6 +44,7 @@
     <nav class="tabs card" role="tablist">
       <button class="tab-btn active" data-tab="jadwal" role="tab">Jadwal</button>
       <button class="tab-btn" data-tab="tracker" role="tab">Tracker</button>
+      <button class="tab-btn" data-tab="history" role="tab">Histori</button>
       <button class="tab-btn" data-tab="stats" role="tab">Stats</button>
     </nav>
 
@@ -70,9 +71,17 @@
         <div id="trackerContainer" class="tracker-list"></div>
       </section>
 
+
+      <section class="tab-panel" id="tab-history">
+        <div class="card section-head">
+          <h2>Tab 3 — Histori Tracking</h2>
+        </div>
+        <div id="historyContainer" class="tracker-list"></div>
+      </section>
+
       <section class="tab-panel" id="tab-stats">
         <div class="card section-head">
-          <h2>Tab 3 — Stats</h2>
+          <h2>Tab 4 — Stats</h2>
           <button id="printStatsBtn" class="btn">Print Stats (PDF)</button>
         </div>
         <section class="stats-cards" id="statsCards"></section>
