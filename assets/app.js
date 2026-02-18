@@ -34,6 +34,7 @@ async function init() {
   bindTabs();
   bindGlobalButtons();
   renderSchedule();
+  renderSchedule();
   renderTrackerToday();
   renderHistory();
   renderStats();
@@ -135,12 +136,24 @@ function renderSchedule() {
     card.innerHTML = `<h3>Day ${day.day} • ${formatDate(day.dateISO)} • Target ${day.targetJuz} juz</h3>`;
     const timeline = document.createElement('div');
     timeline.className = 'timeline';
+
     day.blocks.forEach(b => {
       const div = document.createElement('div');
       div.className = `block ${b.type}`;
       div.innerHTML = `<span>${b.label}</span><strong>${b.start}–${b.end}</strong>`;
       timeline.appendChild(div);
     });
+
+    const dayActuals = state.history
+      .filter(h => h.day === day.day)
+      .sort((a, b) => a.sessionIndex - b.sessionIndex);
+    dayActuals.forEach(a => {
+      const div = document.createElement('div');
+      div.className = 'block actual';
+      div.innerHTML = `<span>Pelaksanaan Sesi ${a.sessionIndex + 1}</span><strong>${a.actualStart}–${a.actualEnd}</strong>`;
+      timeline.appendChild(div);
+    });
+
     card.append(timeline);
     root.appendChild(card);
   });
@@ -167,7 +180,11 @@ function renderTrackerToday() {
     card.innerHTML = `
       <strong>Sesi ${idx + 1} — ${session.type}</strong>
       <p class="small">Tanggal otomatis: ${formatDate(session.trackDateISO)}</p>
-      <p class="small">Jam otomatis: ${session.actualStart}–${session.actualEnd} (${session.durationMin} menit)</p>
+      <p class="small">Jadwal: ${session.plannedStart}–${session.plannedEnd} (durasi rencana ${session.durationMin} menit)</p>
+      <label>Jam mulai pelaksanaan (otomatis end by durasi rencana)
+        <input data-day="${today}" data-session="${idx}" data-field="actualStart" value="${session.actualStart}" placeholder="contoh: 09:00">
+      </label>
+      <p class="small">Pelaksanaan (hasil): ${session.actualStart}–${session.actualEnd}</p>
       <div class="session-grid">
         ${inputField('Surah start', 'surahStart', session.surahStart, false, 'surahList', today, idx)}
         ${inputField('Ayat start', 'ayatStart', session.ayatStart, false, '', today, idx)}
@@ -230,9 +247,19 @@ function onProgressInput(e) {
   const idx = Number(e.target.dataset.session);
   const card = e.target.closest('.session-card');
   const session = state.days[day].sessions[idx];
+
   card.querySelectorAll('input[data-field]').forEach(inp => {
     if (!inp.readOnly) session[inp.dataset.field] = inp.value.trim();
   });
+
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(session.actualStart)) {
+    session.actualEnd = '';
+  } else {
+    const plannedDuration = Math.max(0, timeToMin(session.plannedEnd) - timeToMin(session.plannedStart));
+    session.durationMin = plannedDuration;
+    session.actualEnd = minToTime(timeToMin(session.actualStart) + plannedDuration);
+  }
+
   validateAndComputeJuz(session);
   renderHomeSummary();
 }
@@ -249,6 +276,11 @@ async function onSaveTrack(e) {
 
   const trackedAtISO = new Date().toISOString();
   session.trackedAt = new Date(trackedAtISO).toLocaleString('id-ID');
+
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(session.actualStart)) {
+    alert('Jam mulai pelaksanaan harus format HH:MM, contoh 09:00.');
+    return;
+  }
 
   const historyItem = {
     id: `${day}-${idx}`,
@@ -413,6 +445,7 @@ function formatDate(iso) { return new Date(iso).toLocaleDateString('id-ID', { we
 async function persistAndRerender() {
   state.savedAt = new Date().toLocaleTimeString('id-ID');
   await saveState(state);
+  renderSchedule();
   renderTrackerToday();
   renderHistory();
   renderStats();
